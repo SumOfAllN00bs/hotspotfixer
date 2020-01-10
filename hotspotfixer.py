@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import inspect
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
@@ -6,24 +7,47 @@ import os
 import sys
 import numpy as np
 
+DEBUG = True
+def line_num():
+    return "function: " \
+           + inspect.currentframe().f_back.f_code.co_name \
+           + ", line:" \
+           + str(inspect.currentframe().f_back.f_lineno)
+
 def main():
     # print command line arguments
-    for arg in sys.argv[1:]:
-        print(arg)
+    if(DEBUG):
+        print(line_num())
+        for arg in sys.argv[1:]:
+            print("\t", arg)
+            cursor = ReadXCursor(arg)
+            # print(cursor[0])
+            # print(cursor[1])
+            # print(cursor[2])
+            # print(cursor[3])
     # window = Gtk.Window(title="Hello World")
     # window.show()
     # window.connect("destroy", Gtk.main_quit)
     # Gtk.main()
 
 def ReadXCursor(filename):
+    if(DEBUG):
+        print(line_num())
     try:
         imagefile = open(filename, 'r+b')
+        if(DEBUG):
+            print("\t", filename)
+            print("\t", str(imagefile))
     except IOError:
+        if(DEBUG):
+            print("IOError")
         return False
 
     # the first 4 bytes of an xcursor imagefile is always Xcur
     magic = imagefile.read(4)
     if magic != 'Xcur':
+        if(DEBUG):
+            print(line_num())
         return False
 
     header = np.fromstring(imagefile.read(4), dtype=np.int32)
