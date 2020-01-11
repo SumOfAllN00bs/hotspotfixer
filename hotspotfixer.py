@@ -1,13 +1,11 @@
 #!/usr/bin/python
+import inspect
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gio, Gtk, GdkPixbuf
-import inspect
-import numpy as np
+from gi.repository import Gtk, GdkPixbuf
 import os
 import sys
-import time
-import threading
+import numpy as np
 
 # Debugging function
 def line_num(onlyLineNum=False):
@@ -18,88 +16,17 @@ def line_num(onlyLineNum=False):
            + ", line: " \
            + str(inspect.currentframe().f_back.f_lineno)
 
-class HotspotFixApp(Gtk.ApplicationWindow):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        max_action = Gio.SimpleAction.new_stateful("maximize",
-                                                    None,
-                                                    GLib.Variant.new_boolean(False))
-        max_action.connect("change-state", self.on_maximize_toggle)
-        self.add_action(max_action)
-        self.connect("notify::is-maximized",
-                      lambda obj, pspec: max_action.set_state(
-                          GLib.Variant.new_boolean(obj.props.is_maximized)
-                      ))
-    def on_maximize_toggle(self, action, value):
-        action.set_state(value)
-        if value.get_boolean():
-            self.maximize()
-        else:
-            self.unmaximize()
-
-class Application(Gtk.Application):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, application_id="noidea.what.to.do",
-                          flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
-                          **kwargs)
-        self.window = None
-        self.add_main_option("test", ord("t"), GLib.OptionFlags.NONE,
-                              GLib.OptionArg.NONE, "Command line test", None)
-        self.add_main_option("file", ord("f"), GLib.OptionFlags.NONE,
-                              GLib.OptionArg.NONE, "Command line test", None)
-    def do_startup(self):
-        Gtk.Application.do_startup(self)
-        action = Gio.SimpleAction.new("about", None)
-        action.connect("activate", self.on_about)
-        self.add_action(action)
-        action = Gio.SimpleAction.new("quit", None)
-        action.connect("activate", self.on_quit)
-        self.add_action(action)
-        builder = Gtk.Builder.new_from_file("menu.xml")
-        self.set_app_menu(builder.get_object("app-menu"))
-    def do_activate(self):
-        if not self.window:
-            self.window = HotspotFixApp(application=self, default_width=700, default_height=700,  title="Main Window")
-        self.window.present()
-    def do_command_line(self, command_line):
-        options = command_line.get_options_dict()
-        options = options.end().unpack()
-        if "test" in options:
-            print("Test argument recieved: %s" % options["test"])
-        if "file" in options:
-            self.cursor = ReadXCursor(arg)
-            if cursor == False:
-                print("Error with file: ", arg)
-                return
-        self.activate()
-        return 0
-    def on_about(self, action, param):
-        about_dialog = Gtk.AboutDialog(transient_for=self.window, modal=True)
-        about_dialog.present()
-    def on_quit(self, action, param):
-        self.quit()
-
-def hide():
+def main():
     # print command line arguments
-    arg = sys.argv[1]
-    cursor = ReadXCursor(arg)
-    if cursor == False:
-        print("Error with file: ", arg)
-        return
-    window = Gtk.Window(default_width=700, default_height=700, title="Edit the hotspot for: " + arg)
-    window.connect("destroy", Gtk.main_quit)
-    cursor_pb = cursor[3][0]
-    cpb_w = cursor_pb.get_width()
-    cpb_h = cursor_pb.get_height()
-    scale = max(max(cpb_w, cpb_h), 700)/min(max(cpb_w, cpb_h), 700)
-    cursor_img = Gtk.Image(pixbuf=(cursor_pb.scale_simple(cpb_w * scale, cpb_h * scale, GdkPixbuf.InterpType.NEAREST)))
-    vbox = Gtk.VBox()
-
-    vbox.pack_start(cursor_img, False, False, 0)
-    window.add(vbox)
-    window.show_all()
-
-    Gtk.main()
+    for arg in sys.argv[1:]:
+        cursor = ReadXCursor(arg)
+        if cursor == False:
+            print("Error with file: ", arg)
+        WriteXCursor(cursor[0], cursor[1], cursor[2], cursor[3], arg + "xcur.out")
+    # window = Gtk.Window(title="Hello World")
+    # window.show()
+    # window.connect("destroy", Gtk.main_quit)
+    # Gtk.main()
 
 def ReadXCursor(filename):
     try:
@@ -173,25 +100,6 @@ def ReadXCursor(filename):
 
     return [xhot, yhot, delay, pics]
 
-def array_from_pixbuf(p):
-    " convert from GdkPixbuf to numpy array"
-    w,h,c,r=(p.get_width(), p.get_height(), p.get_n_channels(), p.get_rowstride())
-    assert p.get_colorspace() == GdkPixbuf.Colorspace.RGB
-    assert p.get_bits_per_sample() == 8
-    if  p.get_has_alpha():
-        assert c == 4
-    else:
-        assert c == 3
-    assert r >= w * c
-    a=np.frombuffer(p.get_pixels(),dtype=np.uint8)
-    if a.shape[0] == w*c*h:
-        return a.reshape( (h, w, c) )
-    else:
-        b=np.zeros((h,w*c),'uint8')
-        for j in range(h):
-            b[j,:]=a[r*j:r*j+w*c]
-        return b.reshape( (h, w, c) )
-
 def WriteXCursor(xhot, yhot, delaylist, pixlist, filename):
     ntoc = len(pixlist)
     file = open(filename, 'w+b')
@@ -231,8 +139,6 @@ def WriteXCursor(xhot, yhot, delaylist, pixlist, filename):
                 for j in range(height):
                     temp_pixels[j, :] = pixels[rowstride * j: rowstride * j + width * channels]
                 pixels = temp_pixels.reshape((height, width, channels))
-            # width = pixlist[i].get_width()
-            # height = pixlist[i].get_height()
             file.write(np.array(max([width, height])).tostring())  # Subtype
             file.write(np.array(1).tostring())  # Version
             file.write(np.array(width).tostring())
@@ -262,5 +168,4 @@ def WriteXCursor(xhot, yhot, delaylist, pixlist, filename):
     return True
 
 if __name__ == "__main__":
-    app = Application()
-    app.run(sys.argv)
+    main()
