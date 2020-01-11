@@ -7,15 +7,22 @@ import os
 import sys
 import numpy as np
 
+# Debugging function
+def line_num(onlyLineNum=False):
+    if(onlyLineNum):
+        return "line: " + str(inspect.currentframe().f_back.f_lineno)
+    return "function: " \
+           + inspect.currentframe().f_back.f_code.co_name \
+           + ", line: " \
+           + str(inspect.currentframe().f_back.f_lineno)
+
 def main():
     # print command line arguments
     for arg in sys.argv[1:]:
         cursor = ReadXCursor(arg)
+        if cursor == False:
+            print("Error with file: ", arg)
         WriteXCursor(cursor[0], cursor[1], cursor[2], cursor[3], arg + "xcur.out")
-        # print(cursor[0])
-        # print(cursor[1])
-        # print(cursor[2])
-        # print(cursor[3])
     # window = Gtk.Window(title="Hello World")
     # window.show()
     # window.connect("destroy", Gtk.main_quit)
@@ -119,11 +126,19 @@ def WriteXCursor(xhot, yhot, delaylist, pixlist, filename):
         file.write(np.array(0x0200fdff).byteswap().tostring())  # Type
 
         if type(pixlist[i]) == GdkPixbuf.Pixbuf:
-            print(line_num)
-            print(type())
-            pixels = pixlist[i].get_pixels_np.array()
+            # partly taken from https://stackoverflow.com/questions/39936737/how-to-turn-gdk-pixbuf-object-into-numpy-array/41714464#41714464
             width = pixlist[i].get_width()
             height = pixlist[i].get_height()
+            channels = pixlist[i].get_n_channels()
+            rowstride = pixlist[i].get_rowstride()
+            pixels = np.frombuffer(pixlist[i].get_pixels(), dtype=np.uint8)
+            if(pixels.shape[0] == width * height * channels):
+                pixels = pixels.reshape( (height, width, channels))
+            else:
+                temp_pixels = np.zeros((height, width, channels), 'uint8')
+                for j in range(height):
+                    temp_pixels[j, :] = pixels[rowstride * j: rowstride * j + width * channels]
+                pixels = temp_pixels.reshape((height, width, channels))
             file.write(np.array(max([width, height])).tostring())  # Subtype
             file.write(np.array(1).tostring())  # Version
             file.write(np.array(width).tostring())
@@ -154,12 +169,3 @@ def WriteXCursor(xhot, yhot, delaylist, pixlist, filename):
 
 if __name__ == "__main__":
     main()
-
-# Debugging function
-def line_num(onlyLineNum=False):
-    if(onlyLineNum):
-        return "line: " + str(inspect.currentframe().f_back.f_lineno)
-    return "function: " \
-           + inspect.currentframe().f_back.f_code.co_name \
-           + ", line: " \
-           + str(inspect.currentframe().f_back.f_lineno)
